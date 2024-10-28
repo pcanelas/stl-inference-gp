@@ -1,2 +1,3 @@
 numpy
 pandas
+geneticengine @ git+https://github.com/alcides/GeneticEngine.git@6b4c680d0a09c5502ab6f09690f8d427f05fe315
