@@ -2,33 +2,38 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass
 from typing import Annotated, Union
+from geneticengine.prelude import abstract
 import numpy as np
 import pandas as pd
 
-from GeneticEngine.geml.simplegp import SimpleGP
-from GeneticEngine.geneticengine.grammar.grammar import extract_grammar
-from GeneticEngine.geneticengine.grammar.metahandlers.floats import FloatRange
-from GeneticEngine.geneticengine.grammar.metahandlers.ints import IntRange
-from GeneticEngine.geneticengine.grammar.metahandlers.vars import VarRange
+from geml.simplegp import SimpleGP
+from geneticengine.grammar.grammar import extract_grammar
+from geneticengine.grammar.metahandlers.floats import FloatRange
+from geneticengine.grammar.metahandlers.ints import IntRange
+from geneticengine.grammar.metahandlers.vars import VarRange
 
 # Load dataset
-trace1 = pd.read_csv("examples/stl/data/nominal_trace1.csv")
+trace1 = pd.read_csv("data/nominal_trace1.csv")
 time_lb = trace1["Time"].min()
 time_up = trace1["Time"].max()
 variables = list(trace1.columns[1:-1])
 
-operators = ['>', '<', '==']
+operators = [">", "<", "=="]
 
 
 # Abstract base class for STL formulas
 class STLFormula(ABC):
-    def evaluate(self, X):
-        ...
+    def evaluate(self, X): ...
+
+
+@abstract
+class FOLFormula(STLFormula):
+    def evaluate(self, X): ...
 
 
 # Terminal class for Boolean literal
 @dataclass
-class BooleanTerminal(ABC):
+class BooleanTerminal(FOLFormula):
     value: bool
 
     def evaluate(self, X):
@@ -41,9 +46,9 @@ class BooleanTerminal(ABC):
 # STL Temporal Operators
 @dataclass
 class Always(STLFormula):
-    expression: Union[BooleanTerminal, Operator]
-    lower_bound: Annotated[float, FloatRange(time_lb, time_up)]
-    upper_bound: Annotated[float, FloatRange(time_lb, time_up)]
+    expression: STLFormula
+    lower_bound: Annotated[float, FloatRange(float(time_lb), float(time_up))]
+    upper_bound: Annotated[float, FloatRange(float(time_lb), float(time_up))]
     is_open_lower_bound: bool
     is_open_upper_bound: bool
 
@@ -53,9 +58,9 @@ class Always(STLFormula):
 
 @dataclass
 class Eventually(STLFormula):
-    expression: Union[BooleanTerminal, Operator]
-    lower_bound: Annotated[float, FloatRange(time_lb, time_up)]
-    upper_bound: Annotated[float, FloatRange(time_lb, time_up)]
+    expression: STLFormula
+    lower_bound: Annotated[float, FloatRange(float(time_lb), float(time_up))]
+    upper_bound: Annotated[float, FloatRange(float(time_lb), float(time_up))]
     is_open_lower_bound: bool
     is_open_upper_bound: bool
 
@@ -64,18 +69,18 @@ class Eventually(STLFormula):
 
 
 @dataclass
-class Conjunction(STLFormula):
-    left: STLFormula
-    right: STLFormula
+class Conjunction(FOLFormula):
+    left: FOLFormula
+    right: FOLFormula
 
     def evaluate(self, X):
         return self.left.evaluate(X) and self.right.evaluate(X)
 
 
 @dataclass
-class Disjunction(STLFormula):
-    left: STLFormula
-    right: STLFormula
+class Disjunction(FOLFormula):
+    left: FOLFormula
+    right: FOLFormula
 
     def evaluate(self, X):
         return self.left.evaluate(X) or self.right.evaluate(X)
@@ -83,7 +88,7 @@ class Disjunction(STLFormula):
 
 # Boolean expressions
 @dataclass
-class Variable(ABC):
+class Variable(FOLFormula):
     var: Annotated[str, VarRange(variables)]
 
     def evaluate(self, X):
@@ -94,27 +99,27 @@ class Variable(ABC):
 
 
 @dataclass
-class Negation(ABC):
-    expression: Union[BooleanTerminal, Operator]
+class Negation(FOLFormula):
+    expression: FOLFormula
 
     def evaluate(self, X):
         return not self.expression.evaluate(X)
 
 
 @dataclass
-class Operator(ABC):
-    left: Union[Variable, Annotated[int, IntRange(-10, 10)]]
-    op: Annotated[str, VarRange[operators]]
+class Operator(FOLFormula):
+    left: Variable
+    op: Annotated[str, VarRange(operators)]
     right: Union[Variable, Annotated[int, IntRange(-10, 10)]]
 
     def evaluate(self, X):
         left_val = self.left.evaluate(X)
         right_val = self.right.evaluate(X)
-        if self.op == '>':
+        if self.op == ">":
             return left_val > right_val
-        elif self.op == '<':
+        elif self.op == "<":
             return left_val < right_val
-        elif self.op == '==':
+        elif self.op == "==":
             return left_val == right_val
         else:
             raise ValueError(f"Unknown operator {self.op}")
@@ -125,9 +130,9 @@ class Operator(ABC):
 
 # Fitness function for Genetic Programming
 def fitness_function(formula: STLFormula):
-    #y_pred = [formula.evaluate(row) for _, row in trace1.iterrows()]
-    #y_true = trace1["ExpectedOutput"].values  # Replace with actual target column
-    #mse = np.mean((np.array(y_pred) - y_true) ** 2)
+    # y_pred = [formula.evaluate(row) for _, row in trace1.iterrows()]
+    # y_true = trace1["ExpectedOutput"].values  # Replace with actual target column
+    # mse = np.mean((np.array(y_pred) - y_true) ** 2)
     # TODO:
     return 10
 
@@ -145,7 +150,7 @@ def main():
             Operator,
             BooleanTerminal,
         ],
-        STLFormula
+        STLFormula,
     )
 
     print(grammar)
@@ -156,12 +161,12 @@ def main():
         grammar=grammar,
         minimize=True,
         max_depth=10,
-        seed=1,
+        seed=123,
         population_size=50,
         elitism=1,
         novelty=2,
         mutation_probability=0.1,
-        crossover_probability=0.8
+        crossover_probability=0.8,
     )
 
     # Execute the GP search
