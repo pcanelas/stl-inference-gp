@@ -2,6 +2,7 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass
 from typing import Annotated, Union
+from geneticengine.prelude import abstract
 import numpy as np
 import pandas as pd
 
@@ -21,13 +22,18 @@ operators = [">", "<", "=="]
 
 
 # Abstract base class for STL formulas
-class STLBool(ABC):
+class STLFormula(ABC):
+    def evaluate(self, X): ...
+
+
+@abstract
+class FOLFormula(STLFormula):
     def evaluate(self, X): ...
 
 
 # Terminal class for Boolean literal
 @dataclass
-class BooleanTerminal(STLBool):
+class BooleanTerminal(FOLFormula):
     value: bool
 
     def evaluate(self, X):
@@ -39,8 +45,8 @@ class BooleanTerminal(STLBool):
 
 # STL Temporal Operators
 @dataclass
-class Always(STLBool):
-    expression: STLBool
+class Always(STLFormula):
+    expression: STLFormula
     lower_bound: Annotated[float, FloatRange(float(time_lb), float(time_up))]
     upper_bound: Annotated[float, FloatRange(float(time_lb), float(time_up))]
     is_open_lower_bound: bool
@@ -51,8 +57,8 @@ class Always(STLBool):
 
 
 @dataclass
-class Eventually(STLBool):
-    expression: Always
+class Eventually(STLFormula):
+    expression: STLFormula
     lower_bound: Annotated[float, FloatRange(float(time_lb), float(time_up))]
     upper_bound: Annotated[float, FloatRange(float(time_lb), float(time_up))]
     is_open_lower_bound: bool
@@ -63,18 +69,18 @@ class Eventually(STLBool):
 
 
 @dataclass
-class Conjunction(STLBool):
-    left: STLBool
-    right: STLBool
+class Conjunction(FOLFormula):
+    left: FOLFormula
+    right: FOLFormula
 
     def evaluate(self, X):
         return self.left.evaluate(X) and self.right.evaluate(X)
 
 
 @dataclass
-class Disjunction(STLBool):
-    left: STLBool
-    right: STLBool
+class Disjunction(FOLFormula):
+    left: FOLFormula
+    right: FOLFormula
 
     def evaluate(self, X):
         return self.left.evaluate(X) or self.right.evaluate(X)
@@ -82,7 +88,7 @@ class Disjunction(STLBool):
 
 # Boolean expressions
 @dataclass
-class Variable(STLBool):
+class Variable(FOLFormula):
     var: Annotated[str, VarRange(variables)]
 
     def evaluate(self, X):
@@ -93,15 +99,15 @@ class Variable(STLBool):
 
 
 @dataclass
-class Negation(STLBool):
-    expression: STLBool
+class Negation(FOLFormula):
+    expression: FOLFormula
 
     def evaluate(self, X):
         return not self.expression.evaluate(X)
 
 
 @dataclass
-class Operator(STLBool):
+class Operator(FOLFormula):
     left: Variable
     op: Annotated[str, VarRange(operators)]
     right: Union[Variable, Annotated[int, IntRange(-10, 10)]]
@@ -123,7 +129,7 @@ class Operator(STLBool):
 
 
 # Fitness function for Genetic Programming
-def fitness_function(formula: STLBool):
+def fitness_function(formula: STLFormula):
     # y_pred = [formula.evaluate(row) for _, row in trace1.iterrows()]
     # y_true = trace1["ExpectedOutput"].values  # Replace with actual target column
     # mse = np.mean((np.array(y_pred) - y_true) ** 2)
@@ -144,7 +150,7 @@ def main():
             Operator,
             BooleanTerminal,
         ],
-        STLBool,
+        STLFormula,
     )
 
     print(grammar)
@@ -155,7 +161,7 @@ def main():
         grammar=grammar,
         minimize=True,
         max_depth=10,
-        seed=1,
+        seed=123,
         population_size=50,
         elitism=1,
         novelty=2,
